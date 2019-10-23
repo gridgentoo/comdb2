@@ -1,0 +1,121 @@
+#!/usr/bin/env bash
+bash -n "$0" | exit 1
+
+set -e
+set -x
+
+# Debug variable
+debug=0
+
+dbnm=$1
+
+if [ "x$dbnm" == "x" ] ; then
+    echo "need a DB name"
+    exit 1
+fi
+
+# Number of insert_records function calls
+nins=0
+
+
+failexit()
+{
+    echo "Failed $1"
+    exit -1
+}
+
+assertcnt ()
+{
+    target=$1
+    cnt=$(cdb2sql --tabs ${CDB2_OPTIONS} $dbnm default "select count(*) from t1")
+    if [ $? -ne 0 ] ; then
+        echo "assertcnt: select error"
+    fi
+
+    #echo "count is now $cnt"
+    if [[ $cnt != $target ]] ; then
+        failexit "count is now $cnt but should be $target"
+    fi
+}
+
+assert_vers()
+{
+    tbl=$1
+    target=$2
+    newver=$(cdb2sql --tabs ${CDB2_OPTIONS} $dbnm default "select table_version('$tbl')")
+    if [[ $newver != $target ]] ; then
+        failexit "newver is now $newver but should be $target"
+    fi
+    tblver=$newver
+}
+
+assert_schema()
+{
+    tbl=$1
+    schema=$2
+
+    echo "make sure that the current schema is $schema"
+    cdb2sql --tabs ${CDB2_OPTIONS} $dbnm default "select csc2 from sqlite_master where name='$tbl'" | sed 's/ \(schema\)/\1/;s/} /}/' > schema.out
+
+    if ! diff -Bw schema.out $schema ; then 
+        cdb2sql --tabs ${CDB2_OPTIONS} $dbnm default 'select * from sqlite_master' > sqlite_master.out
+        failexit "final schema is not same as $schema: diff schema.out $schema"
+    fi
+}
+
+do_verify()
+{
+    cdb2sql ${CDB2_OPTIONS} $dbnm default "exec procedure sys.cmd.verify('t1')" &> verify.out
+
+    if ! grep succeeded verify.out > /dev/null ; then
+        failexit "Verify"
+    fi
+}
+
+assertres ()
+{
+    if [ $# != 2 ] ; then 
+        failexit "number of parameters passed is $# but expecting 2"
+    fi
+    res=$1
+    target=$2
+    if [ "$res" != "$target" ] ; then
+        failexit "res is $res but should be $target"
+    fi
+}
+
+#test inserting a large number of items via generate series and query for them
+gen_series_test()
+{
+    MAX=9000
+    cdb2sql --tabs ${CDB2_OPTIONS} $dbnm default "create table t2 (i int)"
+    cdb2sql --tabs ${CDB2_OPTIONS} $dbnm default "insert into t2 select * from generate_series(1, $MAX) "
+    cdb2sql --tabs ${CDB2_OPTIONS} $dbnm default "select distinct i from t2" | sort -n > gen.out
+    i=1
+    while [ $i -le $MAX ] ; do 
+        echo $i >> gen.exp
+        let i=i+1
+    done
+    if ! diff gen.out gen.exp ; then 
+        failexit 'genseries content not what it is expected'
+    fi
+}
+
+echo $CDB2_CONFIG
+THRDS=20
+CNT=10000
+ITERATIONS=10
+TRANSIZE=0
+
+gen_series_test
+
+time ${TESTSBUILDDIR}/insert_lots_mt $dbnm $THRDS $CNT $ITERATIONS $TRANSIZE> ins1.out
+assertcnt $((THRDS * CNT * ITERATIONS))
+
+cdb2sql --tabs ${CDB2_OPTIONS} $dbnm default "truncate t1"
+
+TRANSIZE=2800
+time ${TESTSBUILDDIR}/insert_lots_mt $dbnm $THRDS $CNT $ITERATIONS $TRANSIZE> ins2.out
+assertcnt $((THRDS * CNT * ITERATIONS))
+
+echo "Success"

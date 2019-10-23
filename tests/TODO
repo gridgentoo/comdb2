@@ -1,0 +1,86 @@
+Test suite TODO (priority order?):
+[X] timeout for prepare/copy/test
+[X] remove all dependencies on comdb2sc -- clustered tests dont work with comdb2sc
+[X] fix any DDL with csc2 keyword
+[X] convert all testcases to use 'default' and ${CDB2_OPTIONS} with cdb2sql
+[X] apply any patches on tests branch back to master
+[X] dbname should take a prefix so you can run multiple (same) tests at once (mtao)
+[X] test output files should have dbname for multiple (same) tests at once
+[X] generated cdb2api file should have db name, not comdb2db for multiple (same) tests at once
+[X] any tests that write to /tmp should prefix with a pid, for multiple (same) tests at once
+[X] any tests that write to /tmp should clean up /tmp on make clean
+[X] comdb2 path - copy binary, run with it? uses /opt/bb/bin/comdb2 by default
+[X] have a way to run before make install?  on cluster before make install?
+[ ] database should already have sane defaults.  consider merging default_options
+[X] fix tools to pass CDB2_CONFIG for cdb2api
+[X] fix tools/scripts to not rely on mikedb/local (use $DBNAME/default)
+[X] way to clean up test databases on remote cluster: only for successful tests
+[ ] testrunner: error on invalid tests 
+[ ] get rid of any lrl options in tests that are already default
+[ ] fix: stat4dump crashes the db -- datacopy.test has that portion disabled
+[ ] fix: dryrun for SC -- instant_sc.test t20 has dryrun disabled
+[X] explicitly specifying master for cdb2sql should make the query run on master. 
+[X} suite should select comdb2_host() and make sure every machine returns
+    itself before declaring that a cluster is ready
+
+
+Unrelated bugs found:
+[ ] non-llmeta if missing lrl options - should give better error
+
+
+Would be nice:
+[ ] 80% of the test scripts are almost identical: run req files, diff with 
+    expected output. Have a single script in tools. At the least import from 
+    a common file any core functionality that is similar in tests.
+[ ] nicer/safer way to stop any runaway tests
+[ ] want 'running/setting/up/etc.' output? little program to show progress of test?
+
+
+TESTS still to be fixed:
+recom_replay.test         -- I dont see errors anymore in single node, let's reenable the test (Lingzhi)
+     -- now all threads have verify error: Thread 7f989bfff700 verify error.
+     prior:
+        error -8 while running 'COMMIT' on iter 0
+        Thread 2aee81b67700 error -105 while running 'UPDATE t1 SET id=3 WHERE id=2'
+	    select count(*) from book where id = 8 AND high_water_sequence = 1 at line 159 with ret -3
+serialstep.test           -- rewrite test to get counts of relevant updated rows
+snap_ha_retry.test        -- hatest task core dumps (disconnect_cdb2h hatest.c:451)
+                             set transaction snapshot isolation   returns effects (garbage)
+
+flaky:
+sc_tableversion
+sc_swapfields
+sc_versmistmatch
+sc_resume
+
+
+# The tests listed below will be skipped when ran as part of
+# 'make all'. These tests however can be run individually.
+
+DISABLED TESTS:
+deadlock_load.test        -- re-enable after Adi merges code
+overflowblobs.test        -- timesout
+halt_processor_tds.test   -- requires a cluster
+rowlocks_blkseq.test
+jepsen_a6.test            -- jepsen tests require java & root access
+jepsen_a6_nemesis.test
+jepsen_atomic_writes.test
+jepsen_bank_nemesis.test
+jepsen_bank.test
+jepsen_dirty_reads.test
+jepsen_g2.test
+jepsen_register_nemesis.test
+jepsen_register.test
+jepsen_sets_nemesis.test
+jepsen_sets.test
+killcluster.test
+register_linearizable.test
+sigstopcluster.test
+cinsert_linearizable.test
+netloss.test              -- does not pass most of the time; requires kernel 4.x & docker 17.x
+restart_socksql.test      -- dont run this for now since masterbranch fails it
+phys_rep.test
+sc_async_constraints.test
+<END>
+
+# vim: set sw=4 ts=4 et:

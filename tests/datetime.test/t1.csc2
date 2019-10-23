@@ -1,0 +1,12 @@
+schema
+{
+   int  id
+   datetime date null=yes
+   intervalym ymint null=yes
+   intervalds dsint null=yes
+}
+
+keys
+{
+   "ID"         = id
+}

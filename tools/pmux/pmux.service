@@ -1,0 +1,10 @@
+[Unit]
+Description=Port allocator for Comdb2
+
+[Service]
+ExecStart=@CMAKE_INSTALL_PREFIX@/bin/pmux -l
+Type=forking
+User=comdb2
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,143 @@
+#!/usr/bin/env bash
+bash -n "$0" | exit 1
+
+################################################################################
+
+# debug=1
+
+# args
+a_dbn=$1
+
+# find input files
+files=$( find . -type f -name \*.test | sort )
+
+# counter 
+nfiles=0
+
+# last batch
+last_batch=
+
+# post-process
+pproc=cat
+
+# testcase output
+testcase_output=
+
+# expected output
+expected_output=
+
+# fastinit
+function fastinit
+{
+    # print debug trace
+    [[ "$debug" == "1" ]] && set -x
+
+    # args
+    typeset db=$1
+    typeset iter=$2
+    typeset tbl
+
+    # flagged?
+    if [[ ! -f $iter.fastinit ]]; then
+        return 0
+    fi
+
+    # fastinit for constraints requires an sql delete
+    for tbl in $(cat $iter.fastinit) ; do
+        echo "cdb2sql ${CDB2_OPTIONS} $db default \"truncate $tbl\""
+        cdb2sql ${CDB2_OPTIONS} $db default "truncate $tbl"
+    done
+
+    return 0
+}
+
+# run tool
+function runtool
+{
+    # print debug trace
+    [[ "$debug" == "1" ]] && set -x
+
+    # args
+    typeset tool=$1
+    typeset args=$2
+    typeset db=$3
+    typeset tcs=$4
+    typeset rmt=$5
+    typeset dblg=$6
+    typeset dbex=$7
+    typeset dbdir=$8
+    typeset log=$9
+
+    # run
+    echo "> $tool \"$args\" $db notused $tcs $rmt $dblog $dbex $dbdir > $log 2>&1"
+    $tool "$args" $db notused $tcs $rmt $dblog $dbex $dbdir > $log 2>&1
+}
+
+# runstepper
+function runstepper
+{
+    # print debug trace
+    [[ "$debug" == "1" ]] && set -x
+
+    # args
+    typeset db=$1
+    typeset tcs=$2
+    typeset log=$3
+
+    # teststepper
+    typeset stp=${TESTSBUILDDIR}/stepper
+
+    # echo
+    echo "> $stp $db $tcs $log"
+
+    # execute
+    $stp $db $tcs $log
+}
+
+# add table partidx for partial indexes
+if [[ -f partidx.csc2 ]] ; then
+    echo "cdb2sql ${CDB2_OPTIONS} $a_dbn default \"create table partidx { `cat partidx.csc2 ` }\""
+    cdb2sql ${CDB2_OPTIONS} $a_dbn default "create table partidx { `cat partidx.csc2 ` }"
+    if [[ $? -ne 0 ]] ; then
+        echo "failed to add partial indexes"
+        exit 1
+    fi
+fi
+# Iterate through input files
+for testcase in *.req ; do
+    test=${testcase%%.req}
+
+    output=${test}.out
+    expected=${test}.expected
+    # Be verbose
+    cmd="cdb2sql ${CDB2_OPTIONS} $a_dbn default - < ${test}.req > $output 2>&1"
+    echo $cmd
+    # run command
+    eval $cmd
+
+    # get testcase output
+    testcase_output=$(cat ${output} | perl -pe "s/BLOCK2_SEQV2\(824\)/BLOCK_SEQ(800)/; s/OP #2 BLOCK_SEQ/OP #3 BLOCK_SEQ/;")
+
+    # get expected output
+    expected_output=$(cat ${expected} | perl -pe "s/BLOCK2_SEQV2\(824\)/BLOCK_SEQ(800)/; s/OP #2 BLOCK_SEQ/OP #3 BLOCK_SEQ/;")
+
+    # verify 
+    if [[ "$testcase_output" != "$expected_output" ]] ; then
+        echo "  ^^^^^^^^^^^^"
+        echo "The above testcase (${testcase}) has failed!!!"
+        echo " "
+        echo "Use 'diff <expected-output> <my-output>' to see why:"
+        echo "> diff ${PWD}/${test}.{expected,out}"
+        echo " "
+        diff ${expected} $output
+        echo " "
+        exit 1
+
+    fi
+
+done
+
+./testsqlclients - $a_dbn
+rc=$?
+
+exit $rc
